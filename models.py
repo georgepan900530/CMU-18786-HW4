@@ -104,15 +104,15 @@ class DCGenerator(nn.Module):
             noise_size, 4 * conv_dim, kernel_size=4, stride=1, padding=0
         )  # 100x1x1 -> 256x4x4
         self.up_conv2 = up_conv(
-            4 * conv_dim, 2 * conv_dim, 4, 2, 1, norm="instance", activ="relu"
+            4 * conv_dim, 2 * conv_dim, 3, 1, 1, norm="instance", activ="relu"
         )  # 256x4x4 -> 128x8x8
         self.up_conv3 = up_conv(
-            2 * conv_dim, conv_dim, 4, 2, 1, norm="instance", activ="relu"
+            2 * conv_dim, conv_dim, 3, 1, 1, norm="instance", activ="relu"
         )  # 128x8x8 -> 64x16x16
         self.up_conv4 = up_conv(
-            conv_dim, 32, 4, 2, 1, norm="instance", activ="relu"
+            conv_dim, 32, 3, 1, 1, norm="instance", activ="relu"
         )  # 64x16x16 -> 32x32x32
-        self.up_conv5 = up_conv(32, 3, 4, 2, 1, activ="tanh")  # 32x32x32 -> 3x64x64
+        self.up_conv5 = up_conv(32, 3, 3, 1, 1, activ="tanh")  # 32x32x32 -> 3x64x64
 
     def forward(self, z):
         """
@@ -172,7 +172,7 @@ class DCDiscriminator(nn.Module):
             2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, "relu"
         )  # 128x8x8 -> 256x4x4
         self.conv5 = conv(
-            4 * conv_dim, 1, 4, 1, 0, norm, False, None
+            4 * conv_dim, 1, 4, 1, 0, None, False, None
         )  # 256x4x4 -> 1x1x1
 
     def forward(self, x):

@@ -261,8 +261,8 @@ def create_parser():
     parser.add_argument("--ext", type=str, default="*.png")
 
     # Directories and checkpoint/sample iterations
-    parser.add_argument("--checkpoint_dir", default="./checkpoints_vanilla")
-    parser.add_argument("--sample_dir", type=str, default="./vanilla")
+    parser.add_argument("--checkpoint_dir", default="checkpoints_vanilla")
+    parser.add_argument("--sample_dir", type=str, default="vanilla")
     parser.add_argument("--log_step", type=int, default=10)
     parser.add_argument("--sample_every", type=int, default=200)
     parser.add_argument("--checkpoint_every", type=int, default=400)
