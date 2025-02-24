@@ -39,60 +39,117 @@ def create_dir(directory):
         os.makedirs(directory)
 
 
-# The implementation of spectral normalization is from the following link: https://gist.github.com/rosinality/a96c559d84ef2b138e486acf27b5a56e
-class SpectralNorm:
+# class SpectralNorm:
+#     def __init__(self, name):
+#         self.name = name
+
+#     def compute_weight(self, module):
+#         weight = getattr(module, self.name + "_orig")
+#         u = getattr(module, self.name + "_u")
+#         size = weight.size()
+#         weight_mat = weight.contiguous().view(size[0], -1)
+#         if weight_mat.is_cuda:
+#             u = u.cuda()
+#         v = weight_mat.t() @ u
+#         v = v / v.norm()
+#         u = weight_mat @ v
+#         u = u / u.norm()
+#         weight_sn = weight_mat / (u.t() @ weight_mat @ v)
+#         weight_sn = weight_sn.view(*size)
+
+#         return weight_sn, Variable(u.data)
+
+#     @staticmethod
+#     def apply(module, name):
+#         fn = SpectralNorm(name)
+
+#         weight = getattr(module, name)
+#         del module._parameters[name]
+#         module.register_parameter(name + "_orig", nn.Parameter(weight.data))
+#         input_size = weight.size(0)
+#         u = Variable(torch.randn(input_size, 1) * 0.1, requires_grad=False)
+#         setattr(module, name + "_u", u)
+#         setattr(module, name, fn.compute_weight(module)[0])
+
+#         module.register_forward_pre_hook(fn)
+
+#         return fn
+
+#     def __call__(self, module, input):
+#         weight_sn, u = self.compute_weight(module)
+#         setattr(module, self.name, weight_sn)
+#         setattr(module, self.name + "_u", u)
+
+
+# def spectral_norm(module, name="weight"):
+#     SpectralNorm.apply(module, name)
+
+#     return module
+
+
+def spectral_norm(weight, u=None, n_power_iterations=1, eps=1e-12):
     """
-    Spectral Normalization
+    Applies spectral normalization to a convolutional weight tensor.
 
-    In GAN training, spectral normalization is used to stabilize the training process. The spectral norm of a matrix W
-    is defined as the largest singular value of W. In terms of GAN, spectral normalization is used to ensure
-    that the Lipschitz constant of a neural network layer is bounded. The Lipschitz constant measures how much the output
-    of a function can change relative to its input.
+    Args:
+        weight (torch.Tensor): Weight tensor with shape (out_channels, in_channels, k_h, k_w).
+        u (torch.Tensor, optional): The vector for power iteration. If None, it will be initialized.
+        n_power_iterations (int): Number of power iterations.
+        eps (float): Small epsilon for numerical stability.
 
+    Returns:
+        weight_sn (torch.Tensor): Spectrally normalized weight.
+        u (torch.Tensor): The updated u vector.
     """
+    # Reshape the weight to a 2D matrix: (out_channels, in_channels * k_h * k_w)
+    out_channels = weight.size(0)
+    weight_mat = weight.view(out_channels, -1)
 
-    def __init__(self, name):
-        self.name = name
+    # Initialize u if not provided
+    if u is None:
+        u = torch.randn(out_channels, device=weight.device)
+        u = F.normalize(u, dim=0, eps=eps)
 
-    def compute_weight(self, module):
-        weight = getattr(module, self.name + "_orig")
-        u = getattr(module, self.name + "_u")
-        size = weight.size()
-        weight_mat = weight.contiguous().view(size[0], -1)
-        if weight_mat.is_cuda:
-            u = u.cuda()
-        v = weight_mat.t() @ u
-        v = v / v.norm()
-        u = weight_mat @ v
-        u = u / u.norm()
-        weight_sn = weight_mat / (u.t() @ weight_mat @ v)
-        weight_sn = weight_sn.view(*size)
+    # Power iteration: update u and estimate largest singular value
+    for _ in range(n_power_iterations):
+        v = F.normalize(torch.matmul(weight_mat.t(), u), dim=0, eps=eps)
+        u = F.normalize(torch.matmul(weight_mat, v), dim=0, eps=eps)
 
-        return weight_sn, Variable(u.data)
-
-    @staticmethod
-    def apply(module, name):
-        fn = SpectralNorm(name)
-
-        weight = getattr(module, name)
-        del module._parameters[name]
-        module.register_parameter(name + "_orig", nn.Parameter(weight.data))
-        input_size = weight.size(0)
-        u = Variable(torch.randn(input_size, 1) * 0.1, requires_grad=False)
-        setattr(module, name + "_u", u)
-        setattr(module, name, fn.compute_weight(module)[0])
-
-        module.register_forward_pre_hook(fn)
-
-        return fn
-
-    def __call__(self, module, input):
-        weight_sn, u = self.compute_weight(module)
-        setattr(module, self.name, weight_sn)
-        setattr(module, self.name + "_u", u)
+    sigma = torch.dot(u, torch.matmul(weight_mat, v))
+    weight_sn = weight / sigma
+    return weight_sn, u
 
 
-def spectral_norm(module, name="weight"):
-    SpectralNorm.apply(module, name)
+# Spectrally Normalized 2D Convolution Layer
+class SpectralNormConv2d(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        bias=True,
+        n_power_iterations=1,
+    ):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size, stride, padding, bias=bias
+        )
+        self.n_power_iterations = n_power_iterations
+        # Register buffer for u
+        self.register_buffer("u", None)
 
-    return module
+    def compute_weight(self):
+        # Get the original weight
+        weight = self.conv.weight
+        # Apply spectral normalization
+        weight_sn, self.u = spectral_norm(weight, self.u, self.n_power_iterations)
+        # Update the weight in place (this ensures gradients flow correctly)
+        self.conv.weight.data = weight_sn
+
+    def forward(self, x):
+        # Compute the spectrally normalized weight
+        self.compute_weight()
+        # Perform the convolution with the normalized weight
+        return self.conv(x)

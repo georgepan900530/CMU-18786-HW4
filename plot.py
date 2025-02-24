@@ -14,6 +14,11 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+
+    if not os.path.exists(args.log_dir):
+        print(f"Creating log directory {args.log_dir}")
+        os.mkdir(args.log_dir)
+
     D_csv = os.path.join(args.log_dir, "D_total.csv")
     G_csv = os.path.join(args.log_dir, "G_total.csv")
 
