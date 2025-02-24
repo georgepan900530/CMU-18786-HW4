@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 import utils
 from data_loader import get_data_loader
-from models import DCGenerator, DCDiscriminator
+from models import *
 
 
 policy = "color,translation,cutout"
@@ -49,8 +49,12 @@ def print_models(G, D):
 
 def create_model(opts):
     """Builds the generators and discriminators."""
-    G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
-    D = DCDiscriminator(conv_dim=opts.conv_dim)
+    if opts.model_type == "vanilla":
+        G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
+        D = DCDiscriminator(conv_dim=opts.conv_dim)
+    elif opts.model_type == "spectral":
+        G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
+        D = DCDiscriminatorWithSpectralNorm(conv_dim=opts.conv_dim)
 
     print_models(G, D)
 
@@ -246,6 +250,7 @@ def create_parser():
     parser.add_argument("--image_size", type=int, default=64)
     parser.add_argument("--conv_dim", type=int, default=32)
     parser.add_argument("--noise_size", type=int, default=100)
+    parser.add_argument("--model_type", type=str, default="vanilla")
 
     # Training hyper-parameters
     parser.add_argument("--num_epochs", type=int, default=500)

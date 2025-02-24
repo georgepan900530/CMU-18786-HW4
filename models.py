@@ -189,54 +189,6 @@ class DCDiscriminator(nn.Module):
         return x.squeeze()
 
 
-# class DCGeneratorWithSpectralNorm(nn.Module):
-
-#     def __init__(self, noise_size, conv_dim=64):
-#         super().__init__()
-
-#         ###########################################
-#         ##   FILL THIS IN: CREATE ARCHITECTURE   ##
-#         ###########################################
-
-#         # According to the spec, it is better to directlyuse convolutional layer without any upsampling as the first layer and generate 4x4 output
-#         # Note that the input noise is in the shape of BSxnoise_sizex1x1
-#         self.up_conv1 = nn.ConvTranspose2d(
-#             noise_size, 4 * conv_dim, kernel_size=4, stride=1, padding=0
-#         )  # 100x1x1 -> 256x4x4
-#         self.up_conv2 = up_conv(
-#             4 * conv_dim, 2 * conv_dim, 3, 1, 1, norm="instance", activ="relu"
-#         )  # 256x4x4 -> 128x8x8
-#         self.up_conv3 = up_conv(
-#             2 * conv_dim, conv_dim, 3, 1, 1, norm="instance", activ="relu"
-#         )  # 128x8x8 -> 64x16x16
-#         self.up_conv4 = up_conv(
-#             conv_dim, 32, 3, 1, 1, norm="instance", activ="relu"
-#         )  # 64x16x16 -> 32x32x32
-#         self.up_conv5 = up_conv(32, 3, 3, 1, 1, activ="tanh")  # 32x32x32 -> 3x64x64
-
-#     def forward(self, z):
-#         """
-#         Generate an image given a sample of random noise.
-
-#         Input
-#         -----
-#             z: BS x noise_size x 1 x 1   -->  16x100x1x1
-
-#         Output
-#         ------
-#             out: BS x channels x image_width x image_height  -->  16x3x64x64
-#         """
-#         ###########################################
-#         ##   FILL THIS IN: FORWARD PASS   ##
-#         ###########################################
-#         z = self.up_conv1(z)
-#         z = self.up_conv2(z)
-#         z = self.up_conv3(z)
-#         z = self.up_conv4(z)
-#         z = self.up_conv5(z)
-#         return z
-
-
 def spectral_norm_conv(
     in_channels,
     out_channels,
