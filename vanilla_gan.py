@@ -254,7 +254,6 @@ def create_parser():
     parser.add_argument("--lr", type=float, default=0.0002)
     parser.add_argument("--beta1", type=float, default=0.5)
     parser.add_argument("--beta2", type=float, default=0.999)
-
     # Data sources
     parser.add_argument("--data", type=str, default="cat/grumpifyBprocessed")
     parser.add_argument("--data_preprocess", type=str, default="basic")
