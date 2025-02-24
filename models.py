@@ -249,15 +249,24 @@ class DCDiscriminatorWithSpectralNorm(nn.Module):
 
     def __init__(self, conv_dim=64, norm="instance"):
         super().__init__()
-        self.conv1 = conv(3, 32, 4, 2, 1, norm=None, spectral_norm=True, "relu")  # 3x64x64 -> 32x32x32
+        self.conv1 = conv(
+            3, 32, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
+        )  # 3x64x64 -> 32x32x32
         self.conv2 = conv(
-            32, conv_dim, 4, 2, 1, norm=None, spectral_norm=True, "relu"
+            32, conv_dim, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
         )  # 32x32x32 -> 64x16x16
         self.conv3 = conv(
-            conv_dim, 2 * conv_dim, 4, 2, 1, norm=None, spectral_norm=True, "relu"
+            conv_dim, 2 * conv_dim, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
         )  # 64x16x16 -> 128x8x8
         self.conv4 = conv(
-            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm=None, spectral_norm=True, "relu"
+            2 * conv_dim,
+            4 * conv_dim,
+            4,
+            2,
+            1,
+            norm=None,
+            spectral_norm=True,
+            activ="relu",
         )  # 128x8x8 -> 256x4x4
         self.conv5 = conv(
             4 * conv_dim, 1, 4, 1, 0, norm=None, spectral_norm=True
