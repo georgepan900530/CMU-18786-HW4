@@ -39,6 +39,7 @@ def create_dir(directory):
         os.makedirs(directory)
 
 
+# The implementation of spectral normalization is from the following link: https://gist.github.com/rosinality/a96c559d84ef2b138e486acf27b5a56e
 class SpectralNorm:
     """
     Spectral Normalization
@@ -48,72 +49,50 @@ class SpectralNorm:
     that the Lipschitz constant of a neural network layer is bounded. The Lipschitz constant measures how much the output
     of a function can change relative to its input.
 
-    Parameters
-    -----
-    module: nn.Module
-        The module to apply spectral normalization to.
-    name: str
-        The name of the weight parameter to apply spectral normalization to.
-    n_power_iterations: int
-        The number of power iterations to use to compute the spectral norm.
-    eps: float
-        The epsilon value to use to prevent division by zero.
     """
 
-    def __init__(self, module, name="weight", n_power_iterations=1, eps=1e-12):
-        self.module = module
+    def __init__(self, name):
         self.name = name
-        self.n_power_iterations = n_power_iterations
-        self.eps = eps
 
-        # Get the weight parameters
-        try:
-            w = getattr(self.module, self.name)
-        except AttributeError:
-            raise ValueError(f"{name} is not an attribute of the module {module}")
+    def compute_weight(self, module):
+        weight = getattr(module, self.name + "_orig")
+        u = getattr(module, self.name + "_u")
+        size = weight.size()
+        weight_mat = weight.contiguous().view(size[0], -1)
+        if weight_mat.is_cuda:
+            u = u.cuda()
+        v = weight_mat.t() @ u
+        v = v / v.norm()
+        u = weight_mat @ v
+        u = u / u.norm()
+        weight_sn = weight_mat / (u.t() @ weight_mat @ v)
+        weight_sn = weight_sn.view(*size)
 
-        # Initialize u and v which are the left and right singular vectors
-        self.register_buffer("u", torch.randn(w.shape[0]))
-        self.register_buffer("v", None)
+        return weight_sn, Variable(u.data)
 
-    def _update_u_v(self):
-        weight = getattr(self.module, self.name).data
-        u = self.u
-        v = self.v
+    @staticmethod
+    def apply(module, name):
+        fn = SpectralNorm(name)
 
-        for _ in range(self.n_power_iterations):
-            # Compute v = (W^T)u / ||(W^T)u||
-            v = F.normalize(torch.mv(weight.t(), u), p=2, dim=0)
-            # Compute u = (Wv) / ||Wv||
-            u = F.normalize(torch.mv(weight, v), p=2, dim=0)
+        weight = getattr(module, name)
+        del module._parameters[name]
+        module.register_parameter(name + "_orig", nn.Parameter(weight.data))
+        input_size = weight.size(0)
+        u = Variable(torch.randn(input_size, 1) * 0.1, requires_grad=False)
+        setattr(module, name + "_u", u)
+        setattr(module, name, fn.compute_weight(module)[0])
 
-        self.u.data = u
-        self.v.data = v
+        module.register_forward_pre_hook(fn)
 
-    def _apply_spectral_norm(self):
-        weight = getattr(self.module, self.name)
-        u = self.u
-        v = self.v
+        return fn
 
-        # Compute the spectral norm
-        sigma = torch.dot(u, torch.mv(weight, v))
-        # Normalize the weight
-        weight.data = weight.data / sigma
-
-    def forward(self, *args, **kwargs):
-        self._update_u_v()
-        self._apply_spectral_norm()
-        return self.module(*args, **kwargs)
+    def __call__(self, module, input):
+        weight_sn, u = self.compute_weight(module)
+        setattr(module, self.name, weight_sn)
+        setattr(module, self.name + "_u", u)
 
 
-class SpectralNormWrapper(nn.Module):
-    """
-    Wrapper for SpectralNorm
-    """
+def spectral_norm(module, name="weight"):
+    SpectralNorm.apply(module, name)
 
-    def __init__(self, module, name="weight", n_power_iterations=1, eps=1e-12):
-        super(SpectralNormWrapper, self).__init__()
-        self.spectral_norm = SpectralNorm(module, name, n_power_iterations, eps)
-
-    def forward(self, *args, **kwargs):
-        return self.spectral_norm.forward(*args, **kwargs)
+    return module

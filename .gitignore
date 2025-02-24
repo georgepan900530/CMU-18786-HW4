@@ -1,5 +1,5 @@
-checkpoints_vanilla/
-vanilla/
+*.pkl
+output/
 *.docx
 .DS_Store
 __pycache__/

@@ -14,7 +14,7 @@
 
 import torch
 import torch.nn as nn
-from utils import SpectralNormWrapper
+from utils import *
 
 
 def up_conv(
@@ -25,7 +25,7 @@ def up_conv(
     padding=1,
     scale_factor=2,
     norm="batch",
-    spectral_norm=False,
+    spectral=False,
     activ=None,
 ):
     """Create a transposed-convolutional layer, with optional normalization."""
@@ -36,7 +36,8 @@ def up_conv(
     )
 
     if spectral_norm:
-        layers.append(SpectralNormWrapper(conv))
+        conv = spectral_norm(conv_layer)
+        layers.append(conv)
     else:
         layers.append(conv)
 
@@ -63,7 +64,7 @@ def conv(
     padding=1,
     norm="batch",
     init_zero_weights=False,
-    spectral_norm=False,
+    spectral=False,
     activ=None,
 ):
     """Create a convolutional layer, with optional normalization."""
@@ -81,8 +82,9 @@ def conv(
             out_channels, in_channels, kernel_size, kernel_size
         )
 
-    if spectral_norm:
-        layers.append(SpectralNormWrapper(conv_layer))
+    if spectral:
+        conv_layer = spectral_norm(conv_layer)
+        layers.append(conv_layer)
     else:
         layers.append(conv_layer)
 
@@ -250,13 +252,13 @@ class DCDiscriminatorWithSpectralNorm(nn.Module):
     def __init__(self, conv_dim=64, norm="instance"):
         super().__init__()
         self.conv1 = conv(
-            3, 32, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
+            3, 32, 4, 2, 1, norm=None, spectral=True, activ="relu"
         )  # 3x64x64 -> 32x32x32
         self.conv2 = conv(
-            32, conv_dim, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
+            32, conv_dim, 4, 2, 1, norm=None, spectral=True, activ="relu"
         )  # 32x32x32 -> 64x16x16
         self.conv3 = conv(
-            conv_dim, 2 * conv_dim, 4, 2, 1, norm=None, spectral_norm=True, activ="relu"
+            conv_dim, 2 * conv_dim, 4, 2, 1, norm=None, spectral=True, activ="relu"
         )  # 64x16x16 -> 128x8x8
         self.conv4 = conv(
             2 * conv_dim,
@@ -265,11 +267,11 @@ class DCDiscriminatorWithSpectralNorm(nn.Module):
             2,
             1,
             norm=None,
-            spectral_norm=True,
+            spectral=True,
             activ="relu",
         )  # 128x8x8 -> 256x4x4
         self.conv5 = conv(
-            4 * conv_dim, 1, 4, 1, 0, norm=None, spectral_norm=True
+            4 * conv_dim, 1, 4, 1, 0, norm=None, spectral=True
         )  # 256x4x4 -> 1x1x1
 
     def forward(self, x):
