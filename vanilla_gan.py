@@ -243,7 +243,7 @@ def training_loop_wgan(train_dataloader, opts):
     G, D = create_model(opts)
 
     # Create optimizers for the generators and discriminators
-    g_optimizer = optim.Adam(G.parameters(), 0.5 * opts.lr, [opts.beta1, opts.beta2])
+    g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
     d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
 
     # Generate fixed noise for sampling from the generator
@@ -307,7 +307,7 @@ def training_loop_wgan(train_dataloader, opts):
                 gradient_penalty = ((gradient_norm - 1) ** 2).mean()
 
                 # Set the gradient penalty coefficient (lambda)
-                lambda_gp = 10
+                lambda_gp = 5
 
                 D_total_loss = D_loss + lambda_gp * gradient_penalty
 
