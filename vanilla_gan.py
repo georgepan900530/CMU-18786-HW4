@@ -143,9 +143,8 @@ def training_loop(train_dataloader, opts):
     G, D = create_model(opts)
 
     # Create optimizers for the generators and discriminators
-    if opts.optimizer == "Adam":
-        g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
-        d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
 
     # Generate fixed noise for sampling from the generator
     fixed_noise = sample_noise(opts.batch_size, opts.noise_size)  # B N 1 1
@@ -367,9 +366,8 @@ def training_loop_lsgan(train_dataloader, opts):
     G, D = create_model(opts)
 
     # Create optimizers for the generators and discriminators
-    if opts.optimizer == "Adam":
-        g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
-        d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
 
     # Generate fixed noise for sampling from the generator
     fixed_noise = sample_noise(opts.batch_size, opts.noise_size)  # B N 1 1
