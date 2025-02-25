@@ -49,9 +49,12 @@ def print_models(G, D):
 
 def create_model(opts):
     """Builds the generators and discriminators."""
-    if opts.model_type == "vanilla" or opts.model_type == "WGAN":
+    if opts.model_type == "vanilla":
         G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
         D = DCDiscriminator(conv_dim=opts.conv_dim)
+    elif opts.model_type == "WGAN":
+        G = DCGeneratorWGAN(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
+        D = DCDiscriminatorWGAN(conv_dim=opts.conv_dim)
     elif opts.model_type == "spectral":
         G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
         D = DCDiscriminatorWithSpectralNorm(conv_dim=opts.conv_dim)

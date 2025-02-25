@@ -59,6 +59,7 @@ def conv(
     padding=1,
     norm="batch",
     init_zero_weights=False,
+    spectral=False,
     activ=None,
 ):
     """Create a convolutional layer, with optional normalization."""
@@ -159,6 +160,54 @@ class ResnetBlock(nn.Module):
         return out
 
 
+class DCGeneratorWGAN(nn.Module):
+
+    def __init__(self, noise_size, conv_dim=64):
+        super().__init__()
+
+        ###########################################
+        ##   FILL THIS IN: CREATE ARCHITECTURE   ##
+        ###########################################
+
+        # According to the spec, it is better to directlyuse convolutional layer without any upsampling as the first layer and generate 4x4 output
+        # Note that the input noise is in the shape of BSxnoise_sizex1x1
+        self.up_conv1 = nn.ConvTranspose2d(
+            noise_size, 4 * conv_dim, kernel_size=4, stride=1, padding=0
+        )  # 100x1x1 -> 256x4x4
+        self.up_conv2 = up_conv(
+            4 * conv_dim, 2 * conv_dim, 3, 1, 1, norm="instance", activ="leaky"
+        )  # 256x4x4 -> 128x8x8
+        self.up_conv3 = up_conv(
+            2 * conv_dim, conv_dim, 3, 1, 1, norm="instance", activ="leaky"
+        )  # 128x8x8 -> 64x16x16
+        self.up_conv4 = up_conv(
+            conv_dim, 32, 3, 1, 1, norm="instance", activ="leaky"
+        )  # 64x16x16 -> 32x32x32
+        self.up_conv5 = up_conv(32, 3, 3, 1, 1, activ="leaky")  # 32x32x32 -> 3x64x64
+
+    def forward(self, z):
+        """
+        Generate an image given a sample of random noise.
+
+        Input
+        -----
+            z: BS x noise_size x 1 x 1   -->  16x100x1x1
+
+        Output
+        ------
+            out: BS x channels x image_width x image_height  -->  16x3x64x64
+        """
+        ###########################################
+        ##   FILL THIS IN: FORWARD PASS   ##
+        ###########################################
+        z = self.up_conv1(z)
+        z = self.up_conv2(z)
+        z = self.up_conv3(z)
+        z = self.up_conv4(z)
+        z = self.up_conv5(z)
+        return z
+
+
 class DCDiscriminatorWGAN(nn.Module):
     """Architecture of the discriminator network."""
 
@@ -196,16 +245,16 @@ class DCDiscriminator(nn.Module):
     def __init__(self, conv_dim=64, norm="instance"):
         super().__init__()
         self.conv1 = conv(
-            3, 32, 4, 2, 1, norm, False, activ="relu"
+            3, 32, 4, 2, 1, norm, False, activ="leaky"
         )  # 3x64x64 -> 32x32x32
         self.conv2 = conv(
-            32, conv_dim, 4, 2, 1, norm, False, activ="relu"
+            32, conv_dim, 4, 2, 1, norm, False, activ="leaky"
         )  # 32x32x32 -> 64x16x16
         self.conv3 = conv(
-            conv_dim, 2 * conv_dim, 4, 2, 1, norm, False, activ="relu"
+            conv_dim, 2 * conv_dim, 4, 2, 1, norm, False, activ="leaky"
         )  # 64x16x16 -> 128x8x8
         self.conv4 = conv(
-            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, activ="relu"
+            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, activ="leaky"
         )  # 128x8x8 -> 256x4x4
         self.conv5 = conv(
             4 * conv_dim, 1, 4, 1, 0, None, False, None
