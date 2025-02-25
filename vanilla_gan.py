@@ -306,7 +306,7 @@ def training_loop_wgan(train_dataloader, opts):
                 gradient_penalty = ((gradient_norm - 1) ** 2).mean()
 
                 # Set the gradient penalty coefficient (lambda)
-                lambda_gp = 5
+                lambda_gp = opts.gp_lambda
 
                 D_total_loss = D_loss + lambda_gp * gradient_penalty
 
@@ -478,10 +478,10 @@ def create_parser():
     parser.add_argument("--conv_dim", type=int, default=32)
     parser.add_argument("--noise_size", type=int, default=100)
     parser.add_argument("--model_type", type=str, default="vanilla")
-    parser.add_argument("--clip_value", type=float, default=0.01)
     parser.add_argument("--load_model", action="store_true")
     parser.add_argument("--D_path", type=str, default=None)
     parser.add_argument("--G_path", type=str, default=None)
+    parser.add_argument("gp_lambda", type=float, default=10)
 
     # Training hyper-parameters
     parser.add_argument("--num_epochs", type=int, default=500)
