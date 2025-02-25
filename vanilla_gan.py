@@ -255,8 +255,8 @@ def training_loop_wgan(train_dataloader, opts):
     G, D = create_model(opts)
 
     # Create optimizers for the generators and discriminators
-    g_optimizer = optim.RMSprop(G.parameters(), opts.lr)
-    d_optimizer = optim.RMSprop(D.parameters(), opts.lr)
+    g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
 
     # Generate fixed noise for sampling from the generator
     fixed_noise = sample_noise(opts.batch_size, opts.noise_size)  # B N 1 1
@@ -277,23 +277,53 @@ def training_loop_wgan(train_dataloader, opts):
             # 1. Compute the discriminator loss on real images
             D_real = D(real_images)
             # 2. Sample noise
-            noise = sample_noise(opts.batch_size, opts.noise_size)
+            noise = sample_noise(real_images.shape[0], opts.noise_size)
 
             # 3. Generate fake images from the noise
             fake_images = G(noise)
 
             # 4. Compute the discriminator loss on the fake images
             D_fake = D(fake_images)
-            D_total_loss = torch.mean(D_fake) - torch.mean(D_real)
+            D_loss = torch.mean(D_fake) - torch.mean(D_real)
+
+            # Gradient Penalty - Better stability than clipping weights
+            # Interpolate between real and fake images
+            epsilon = torch.rand(
+                real_images.shape[0], 1, 1, 1, device=real_images.device
+            )
+            interpolated_images = epsilon * real_images + (1 - epsilon) * fake_images
+            interpolated_images.requires_grad_(True)
+
+            # Get critic output on interpolated images
+            D_interpolated = D(interpolated_images)
+
+            # Compute gradients of D_interpolated with respect to interpolated_images
+            grad_outputs = torch.ones_like(D_interpolated)
+            gradients = torch.autograd.grad(
+                outputs=D_interpolated,
+                inputs=interpolated_images,
+                grad_outputs=grad_outputs,
+                create_graph=True,
+                retain_graph=True,
+                only_inputs=True,
+            )[0]
+
+            # Reshape gradients and compute their L2 norm for each sample in the batch
+            gradients = gradients.view(gradients.size(0), -1)
+            gradient_norm = gradients.norm(2, dim=1)
+
+            # Compute the penalty as the squared difference from 1
+            gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+
+            # Set the gradient penalty coefficient (lambda)
+            lambda_gp = 10
+
+            D_total_loss = D_loss + lambda_gp * gradient_penalty
 
             # update the discriminator D
             d_optimizer.zero_grad()
             D_total_loss.backward()
             d_optimizer.step()
-
-            # We need to clip the weights of the discriminator to enforce Lipschitz constraint
-            for p in D.parameters():
-                p.data.clamp_(-opts.clip_value, opts.clip_value)
 
             # According to the algorithm 1 in WGAN paper, we need to update the critic n_critic times befor updating the generator
             # This is equivalent to update the generator after n_critic iterations
@@ -373,7 +403,7 @@ def create_parser():
     parser.add_argument("--lr", type=float, default=0.0002)
     parser.add_argument("--beta1", type=float, default=0.5)
     parser.add_argument("--beta2", type=float, default=0.999)
-    parser.add_argument("--n_critic", type=int, default=5)
+    parser.add_argument("--n_critic", type=int, default=1)
 
     # Data sources
     parser.add_argument("--data", type=str, default="cat/grumpifyBprocessed")

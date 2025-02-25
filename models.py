@@ -59,7 +59,6 @@ def conv(
     padding=1,
     norm="batch",
     init_zero_weights=False,
-    spectral=False,
     activ=None,
 ):
     """Create a convolutional layer, with optional normalization."""
@@ -160,20 +159,53 @@ class ResnetBlock(nn.Module):
         return out
 
 
+class DCDiscriminatorWGAN(nn.Module):
+    """Architecture of the discriminator network."""
+
+    def __init__(self, conv_dim=64, norm="instance"):
+        super().__init__()
+        self.conv1 = conv(
+            3, 32, 4, 2, 1, norm, False, activ="leaky"
+        )  # 3x64x64 -> 32x32x32
+        self.conv2 = conv(
+            32, conv_dim, 4, 2, 1, norm, False, activ="leaky"
+        )  # 32x32x32 -> 64x16x16
+        self.conv3 = conv(
+            conv_dim, 2 * conv_dim, 4, 2, 1, norm, False, activ="leaky"
+        )  # 64x16x16 -> 128x8x8
+        self.conv4 = conv(
+            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, activ="leaky"
+        )  # 128x8x8 -> 256x4x4
+        self.conv5 = conv(
+            4 * conv_dim, 1, 4, 1, 0, None, False, None
+        )  # 256x4x4 -> 1x1x1
+
+    def forward(self, x):
+        """Forward pass, x is (B, C, H, W)."""
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
+        return x.squeeze()
+
+
 class DCDiscriminator(nn.Module):
     """Architecture of the discriminator network."""
 
     def __init__(self, conv_dim=64, norm="instance"):
         super().__init__()
-        self.conv1 = conv(3, 32, 4, 2, 1, norm, False, "relu")  # 3x64x64 -> 32x32x32
+        self.conv1 = conv(
+            3, 32, 4, 2, 1, norm, False, activ="relu"
+        )  # 3x64x64 -> 32x32x32
         self.conv2 = conv(
-            32, conv_dim, 4, 2, 1, norm, False, "relu"
+            32, conv_dim, 4, 2, 1, norm, False, activ="relu"
         )  # 32x32x32 -> 64x16x16
         self.conv3 = conv(
-            conv_dim, 2 * conv_dim, 4, 2, 1, norm, False, "relu"
+            conv_dim, 2 * conv_dim, 4, 2, 1, norm, False, activ="relu"
         )  # 64x16x16 -> 128x8x8
         self.conv4 = conv(
-            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, "relu"
+            2 * conv_dim, 4 * conv_dim, 4, 2, 1, norm, False, activ="relu"
         )  # 128x8x8 -> 256x4x4
         self.conv5 = conv(
             4 * conv_dim, 1, 4, 1, 0, None, False, None
