@@ -49,7 +49,7 @@ def print_models(G, D):
 
 def create_model(opts):
     """Builds the generators and discriminators."""
-    if opts.model_type == "vanilla":
+    if opts.model_type == "vanilla" or opts.model_type == "LSGAN":
         G = DCGenerator(noise_size=opts.noise_size, conv_dim=opts.conv_dim)
         D = DCDiscriminator(conv_dim=opts.conv_dim)
     elif opts.model_type == "WGAN":
@@ -357,6 +357,102 @@ def training_loop_wgan(train_dataloader, opts):
             iteration += 1
 
 
+def training_loop_lsgan(train_dataloader, opts):
+    """Runs the training loop.
+    * Saves checkpoints every opts.checkpoint_every iterations
+    * Saves generated samples every opts.sample_every iterations
+    """
+
+    # Create generators and discriminators
+    G, D = create_model(opts)
+
+    # Create optimizers for the generators and discriminators
+    if opts.optimizer == "Adam":
+        g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
+        d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
+
+    # Generate fixed noise for sampling from the generator
+    fixed_noise = sample_noise(opts.batch_size, opts.noise_size)  # B N 1 1
+
+    iteration = 1
+
+    total_train_iters = opts.num_epochs * len(train_dataloader)
+
+    for _ in range(opts.num_epochs):
+
+        for batch in train_dataloader:
+
+            real_images = batch
+            real_images = utils.to_var(real_images)
+
+            # TRAIN THE DISCRIMINATOR
+            # In this LSGAN implementation, we will use 0-1 binary coding scheme for the loss
+            # Refernece: https://sh-tsang.medium.com/review-lsgan-least-squares-generative-adversarial-networks-gan-bec12167e915
+            # 1. Compute the discriminator loss on real images
+            D_real = D(real_images)
+            # Note that the output of the disciminator does not go through a sigmoid
+            D_real_loss = 0.5 * torch.mean((D_real - 1) ** 2)
+
+            # 2. Sample noise
+            noise = sample_noise(opts.batch_size, opts.noise_size)
+
+            # 3. Generate fake images from the noise
+            fake_images = G(noise)
+
+            # 4. Compute the discriminator loss on the fake images
+            D_fake = D(fake_images)
+            D_fake_loss = 0.5 * torch.mean(D_fake**2)
+            D_total_loss = D_real_loss + D_fake_loss
+
+            # update the discriminator D
+            d_optimizer.zero_grad()
+            D_total_loss.backward()
+            d_optimizer.step()
+
+            # TRAIN THE GENERATOR
+            # 1. Sample noise
+            noise = sample_noise(opts.batch_size, opts.noise_size)
+
+            # 2. Generate fake images from the noise
+            fake_images = G(noise)
+
+            # 3. Compute the generator loss
+            G_loss = 0.5 * torch.mean((D(fake_images) - 1) ** 2)
+
+            # update the generator G
+            g_optimizer.zero_grad()
+            G_loss.backward()
+            g_optimizer.step()
+
+            # Print the log info
+            if iteration % opts.log_step == 0:
+                print(
+                    "Iteration [{:4d}/{:4d}] | D_real_loss: {:6.4f} | "
+                    "D_fake_loss: {:6.4f} | G_loss: {:6.4f}".format(
+                        iteration,
+                        total_train_iters,
+                        D_real_loss.item(),
+                        D_fake_loss.item(),
+                        G_loss.item(),
+                    )
+                )
+                logger.add_scalar("D/fake", D_fake_loss, iteration)
+                logger.add_scalar("D/real", D_real_loss, iteration)
+                logger.add_scalar("D/total", D_total_loss, iteration)
+                logger.add_scalar("G/total", G_loss, iteration)
+
+            # Save the generated samples
+            if iteration % opts.sample_every == 0:
+                save_samples(G, fixed_noise, iteration, opts)
+                save_images(real_images, iteration, opts, "real")
+
+            # Save the model parameters
+            if iteration % opts.checkpoint_every == 0:
+                checkpoint(iteration, G, D, opts)
+
+            iteration += 1
+
+
 def main(opts):
     """Loads the data and starts the training loop."""
 
@@ -369,6 +465,8 @@ def main(opts):
 
     if opts.model_type == "WGAN":
         training_loop_wgan(dataloader, opts)
+    elif opts.model_type == "LSGAN":
+        training_loop_lsgan(dataloader, opts)
     else:
         training_loop(dataloader, opts)
 
