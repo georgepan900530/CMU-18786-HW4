@@ -146,9 +146,6 @@ def training_loop(train_dataloader, opts):
     if opts.optimizer == "Adam":
         g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
         d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
-    elif opts.optimizer == "RMSprop":
-        g_optimizer = optim.RMSprop(G.parameters(), opts.lr)
-        d_optimizer = optim.RMSprop(D.parameters(), opts.lr)
 
     # Generate fixed noise for sampling from the generator
     fixed_noise = sample_noise(opts.batch_size, opts.noise_size)  # B N 1 1
@@ -168,10 +165,9 @@ def training_loop(train_dataloader, opts):
             # 1. Compute the discriminator loss on real images
             D_real = D(real_images)
             # Note that the output of the disciminator does not go through a sigmoid
-            if opts.model_type != "WGAN":
-                D_real_loss = F.binary_cross_entropy_with_logits(
-                    D_real, torch.ones_like(D_real)
-                )
+            D_real_loss = F.binary_cross_entropy_with_logits(
+                D_real, torch.ones_like(D_real)
+            )
 
             # 2. Sample noise
             noise = sample_noise(opts.batch_size, opts.noise_size)
@@ -181,23 +177,15 @@ def training_loop(train_dataloader, opts):
 
             # 4. Compute the discriminator loss on the fake images
             D_fake = D(fake_images)
-            if opts.model_type != "WGAN":
-                D_fake_loss = F.binary_cross_entropy_with_logits(
-                    D_fake, torch.zeros_like(D_fake)
-                )
-                D_total_loss = D_real_loss + D_fake_loss
-            else:
-                D_total_loss = torch.mean(D_fake) - torch.mean(D_real)
+            D_fake_loss = F.binary_cross_entropy_with_logits(
+                D_fake, torch.zeros_like(D_fake)
+            )
+            D_total_loss = D_real_loss + D_fake_loss
 
             # update the discriminator D
             d_optimizer.zero_grad()
             D_total_loss.backward()
             d_optimizer.step()
-
-            # We need to clip the weights of the discriminator to enforce Lipschitz constraint
-            if opts.model_type == "WGAN":
-                for p in D.parameters():
-                    p.data.clamp_(-opts.clip_value, opts.clip_value)
 
             # TRAIN THE GENERATOR
             # 1. Sample noise
@@ -207,12 +195,9 @@ def training_loop(train_dataloader, opts):
             fake_images = G(noise)
 
             # 3. Compute the generator loss
-            if opts.model_type != "WGAN":
-                G_loss = F.binary_cross_entropy_with_logits(
-                    D(fake_images), torch.ones_like(D(fake_images))
-                )
-            else:
-                G_loss = -torch.mean(D(fake_images))
+            G_loss = F.binary_cross_entropy_with_logits(
+                D(fake_images), torch.ones_like(D(fake_images))
+            )
 
             # update the generator G
             g_optimizer.zero_grad()
@@ -258,7 +243,7 @@ def training_loop_wgan(train_dataloader, opts):
     G, D = create_model(opts)
 
     # Create optimizers for the generators and discriminators
-    g_optimizer = optim.Adam(G.parameters(), opts.lr, [opts.beta1, opts.beta2])
+    g_optimizer = optim.Adam(G.parameters(), 0.5 * opts.lr, [opts.beta1, opts.beta2])
     d_optimizer = optim.Adam(D.parameters(), opts.lr, [opts.beta1, opts.beta2])
 
     # Generate fixed noise for sampling from the generator
@@ -276,75 +261,75 @@ def training_loop_wgan(train_dataloader, opts):
             real_images = utils.to_var(real_images)
 
             # TRAIN THE DISCRIMINATOR
-            # for i in range(opts.n_critic):
-            # 1. Compute the discriminator loss on real images
-            D_real = D(real_images)
-            # 2. Sample noise
-            noise = sample_noise(real_images.shape[0], opts.noise_size)
-
-            # 3. Generate fake images from the noise
-            fake_images = G(noise)
-
-            # 4. Compute the discriminator loss on the fake images
-            D_fake = D(fake_images)
-            D_loss = torch.mean(D_fake) - torch.mean(D_real)
-
-            # Gradient Penalty - Better stability than clipping weights
-            # Interpolate between real and fake images
-            epsilon = torch.rand(
-                real_images.shape[0], 1, 1, 1, device=real_images.device
-            )
-            interpolated_images = epsilon * real_images + (1 - epsilon) * fake_images
-            interpolated_images.requires_grad_(True)
-
-            # Get critic output on interpolated images
-            D_interpolated = D(interpolated_images)
-
-            # Compute gradients of D_interpolated with respect to interpolated_images
-            grad_outputs = torch.ones_like(D_interpolated)
-            gradients = torch.autograd.grad(
-                outputs=D_interpolated,
-                inputs=interpolated_images,
-                grad_outputs=grad_outputs,
-                create_graph=True,
-                retain_graph=True,
-                only_inputs=True,
-            )[0]
-
-            # Reshape gradients and compute their L2 norm for each sample in the batch
-            gradients = gradients.view(gradients.size(0), -1)
-            gradient_norm = gradients.norm(2, dim=1)
-
-            # Compute the penalty as the squared difference from 1
-            gradient_penalty = ((gradient_norm - 1) ** 2).mean()
-
-            # Set the gradient penalty coefficient (lambda)
-            lambda_gp = 10
-
-            D_total_loss = D_loss + lambda_gp * gradient_penalty
-
-            # update the discriminator D
-            d_optimizer.zero_grad()
-            D_total_loss.backward()
-            d_optimizer.step()
-
             # According to the algorithm 1 in WGAN paper, we need to update the critic n_critic times befor updating the generator
-            # This is equivalent to update the generator after n_critic iterations
-            if iteration % opts.n_critic == 0:
-                # TRAIN THE GENERATOR
-                # 1. Sample noise
-                noise = sample_noise(opts.batch_size, opts.noise_size)
+            for _ in range(opts.n_critic):
+                # 1. Compute the discriminator loss on real images
+                D_real = D(real_images)
+                # 2. Sample noise
+                noise = sample_noise(real_images.shape[0], opts.noise_size)
 
-                # 2. Generate fake images from the noise
+                # 3. Generate fake images from the noise
                 fake_images = G(noise)
 
-                # 3. Compute the generator loss
-                G_loss = -torch.mean(D(fake_images))
+                # 4. Compute the discriminator loss on the fake images
+                D_fake = D(fake_images)
+                D_loss = torch.mean(D_fake) - torch.mean(D_real)
 
-                # update the generator G
-                g_optimizer.zero_grad()
-                G_loss.backward()
-                g_optimizer.step()
+                # Gradient Penalty
+                # Interpolate between real and fake images
+                epsilon = torch.rand(
+                    real_images.shape[0], 1, 1, 1, device=real_images.device
+                )
+                interpolated_images = (
+                    epsilon * real_images + (1 - epsilon) * fake_images
+                )
+                interpolated_images.requires_grad_(True)
+
+                # Get critic output on interpolated images
+                D_interpolated = D(interpolated_images)
+
+                # Compute gradients of D_interpolated with respect to interpolated_images
+                grad_outputs = torch.ones_like(D_interpolated)
+                gradients = torch.autograd.grad(
+                    outputs=D_interpolated,
+                    inputs=interpolated_images,
+                    grad_outputs=grad_outputs,
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True,
+                )[0]
+
+                # Reshape gradients and compute their L2 norm for each sample in the batch
+                gradients = gradients.view(gradients.size(0), -1)
+                gradient_norm = gradients.norm(2, dim=1)
+
+                # Compute the penalty as the squared difference from 1
+                gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+
+                # Set the gradient penalty coefficient (lambda)
+                lambda_gp = 10
+
+                D_total_loss = D_loss + lambda_gp * gradient_penalty
+
+                # update the discriminator D
+                d_optimizer.zero_grad()
+                D_total_loss.backward()
+                d_optimizer.step()
+
+            # TRAIN THE GENERATOR
+            # 1. Sample noise
+            noise = sample_noise(opts.batch_size, opts.noise_size)
+
+            # 2. Generate fake images from the noise
+            fake_images = G(noise)
+
+            # 3. Compute the generator loss
+            G_loss = -torch.mean(D(fake_images))
+
+            # update the generator G
+            g_optimizer.zero_grad()
+            G_loss.backward()
+            g_optimizer.step()
 
             # Print the log info
             if iteration % opts.log_step == 0:
@@ -398,6 +383,9 @@ def create_parser():
     parser.add_argument("--noise_size", type=int, default=100)
     parser.add_argument("--model_type", type=str, default="vanilla")
     parser.add_argument("--clip_value", type=float, default=0.01)
+    parser.add_argument("--load_model", action="store_true")
+    parser.add_argument("--D_path", type=str, default=None)
+    parser.add_argument("--G_path", type=str, default=None)
 
     # Training hyper-parameters
     parser.add_argument("--num_epochs", type=int, default=500)

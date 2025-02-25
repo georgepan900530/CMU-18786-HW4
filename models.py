@@ -183,7 +183,7 @@ class DCGeneratorWGAN(nn.Module):
         self.up_conv4 = up_conv(
             conv_dim, 32, 3, 1, 1, norm="instance", activ="leaky"
         )  # 64x16x16 -> 32x32x32
-        self.up_conv5 = up_conv(32, 3, 3, 1, 1, activ="leaky")  # 32x32x32 -> 3x64x64
+        self.up_conv5 = up_conv(32, 3, 3, 1, 1, activ="tanh")  # 32x32x32 -> 3x64x64
 
     def forward(self, z):
         """
